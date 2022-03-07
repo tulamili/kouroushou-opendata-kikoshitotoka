@@ -1,3 +1,10 @@
 このレポジトリには、下記のURLから取得したファイルを加工して公開している。
 
-https://www.mhlw.go.jp/content/life_welfare_small_fund.csv
+https://www.mhlw.go.jp/content/life_welfare_small_fund.csv 
+「厚生労働省ホームページ」内へのリンクであり、「緊急小口資金等の特例貸付」についてである。
+2022年1月26日より、定期的にデータを収集している。
+
+上記のデータはCSVファイルであり、これを定期的に収集した上で、収集日時を表す文字列を最も左の列に加えた上で、
+このレポジトリのにある、 kktk_since220126.csv として公開している。
+
+
