@@ -21,9 +21,6 @@ my @head = qw [ retreived_at waiting_days term_start term_end term_days applicat
 say join $osep , @head if 0 ne ( $o{1} // '' ) ;
 
 # 除外するファイル
-my %exclude ; 
-#$exclude { $_ } = 1 for map { match_glob ($_) } exists $o{E} ? split /,/ , $o{E} : () ; # match_globでなくてglobだと{a,b}が使えない。
-#$exclude { $_ } = 1 for exists $o{E} ? split /,/ , $o{E} : () ; # match_globでなくてglobだと{a,b}が使えない。
 $o{E} //= '' ;
 
 # メイン
@@ -33,7 +30,6 @@ my $fn ; # ファイル名
 END { say "\@ARGV=@ARGV" if $? != 0 } ;
 
 for $fn ( @ARGV ) { 
-  #next if $exclude { $fn } ; 
   next if match_glob ( $o{E} , $fn ) ;
   say qq[# $fn] if $o{a} ; # ファイル名の表示
   & each_file ( $fn ) ; 
@@ -45,7 +41,6 @@ sub each_file ( $ ) {
   #my $b0 = $_[ 0 ] ;
   open my $FH , '<' , $_[0] ;
   while ( <$FH> ) { 
-  	#print $_  ; next ;
     chomp ; 
     $_ = decode_utf8 ( $_ ) ;
     say FAINT YELLOW qq[<-- $_[0]:$.:$_] if $o{i} ; # 入力行を書き出す -i が指定されていた場合。デバッグ用途。
@@ -60,12 +55,10 @@ sub each_file ( $ ) {
     my @F = split /,/ , $_ , -1 ; 
     die "A line contains its columns whose number is not 7" if @F != 7 ;
     $_ *= 1_0000_0000 for $F[-2] , $F[-1] ; # 最も右の2列を1億倍にする。
-    
     my $days = shift @F ; # 最左列を取り出す
     my ($day1,$day2) = split /[\~～]/ , $days , 2 ;
     my $p1 = str2tp ( $day1 , $b0 ) ; # 期間開始日
     my $p2 = str2tp ( $day2 , $b0 ) ; # 期間終了日
-  
     my @out ; 
     push @out ,  $b0 -> strftime('%F') ;
     push @out ,  ( $b0 - $p2 ) / 8_6400 ;
@@ -73,12 +66,8 @@ sub each_file ( $ ) {
     push @out ,  $p2 -> strftime('%F') ;
     push @out ,  ( $p2 - $p1 ) / 8_6400 + 1 ;
     push @out , @F ;
-
     $_ = div $_ for @out [ 4 .. $#out ] ; 
-
     say join $osep , @out ;
-
-    #last if eof ; 
   }
 }
 
