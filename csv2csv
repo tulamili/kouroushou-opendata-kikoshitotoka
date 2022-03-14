@@ -1,0 +1,101 @@
+#!/usr/bin/perl
+use strict ;
+use warnings ; 
+use feature 'say' ;
+use Time::Piece ; # qw [ ONE_DAY ]; 
+use Encode qw[ decode_utf8 ] ; 
+use utf8 ;
+use Carp ;
+use Getopt::Std ; getopts 'a' , \my%o ;
+sub conv ( $$ ) ;
+say join "\t" , qw [retreived_at waiting_days term_start term_end term_days applications applications_acc provisions provisions_acc amount amount_acc] ; 
+for ( @ARGV ) { 
+  say qq["$_"] if $o{a} ;
+  & each_file ( $_ ) ; 
+}
+exit 0 ;
+
+sub each_file ( $ ) { 
+  my $b0 = Time::Piece -> strptime ( do { $_ =~ m/(\d{6})/ ; $1 } , '%y%m%d' ) ; # 基準となる日をファイル名から採取する。 # base 
+  #my $b0 = $_[ 0 ] ;
+  open my $FH , '<' , $_[0] ;
+  while ( <$FH> ) { 
+  	#print $_  ; next ;
+    chomp ; 
+    $_ = decode_utf8 ( $_ ) ;
+    if ( $. == 1 ){ 
+      die "The first line is out of the format." if $_ ne "日付,貸付申請件数,累計貸付申請件数,貸付決定件数,累計貸付決定件数,貸付決定額,累計貸付決定額" ; 
+      next ;
+    } ; 
+  
+    my @F = split /,/ , $_ , -1 ; 
+    die "A line contains its columns whose number is not 7" if @F != 7 ;
+    
+    $_ *= 1_0000_0000 for $F[-2] , $F[-1] ; # 最も右の2列を1億倍にする。
+    
+    my $days = shift @F ; # 最左列を取り出す
+    my ($day1,$day2) = split /[\~～]/ , $days , 2 ;
+    #say "$day1++ $day2" ;
+    #next ; 
+    my $p1 = str2tp ( $day1 , $b0 ) ; # 期間開始日
+    my $p2 = str2tp ( $day2 , $b0 ) ; # 期間終了日
+  
+    my @out ; 
+    push @out ,  $b0 -> strftime('%F') ;
+    push @out ,  ( $b0 - $p2 ) / 8_6400 ;
+    push @out ,  $p1 -> strftime('%F') ;
+    push @out ,  $p2 -> strftime('%F') ;
+    push @out ,  ( $p2 - $p1 ) / 8_6400 + 1 ;
+    push @out , @F  ;
+    say join "\t", @out ;
+
+    #last if eof ; 
+  }
+}
+
+sub str2tp ( $$ ) { # 文字列をTime::Pieceのオブジェクトに変換する。
+  my $d = $_[0] ; 
+  my $o = $_[1] ; # 基準日 o ; ファイル名の引数から考えた。
+  if ( $d =~ m|^(\d+)/(\d+)$|) { 
+  	return Time::Piece -> strptime ( '2020-03-25' , '%Y-%m-%d' ) if $. == 2 && $d eq '3/25' ; 
+  	my ($d1,$d2,$d3) = map { Time::Piece -> strptime ( $_ , '%Y/%m/%d') } map { "$_/$d"} do { my $y = $o -> year ; ($y-1,$y,$y+1) } ;
+  	return  ( sort { abs( $a - $o ) <=> abs ( $b - $o ) } ( $d1,$d2,$d3 ) ) [0] ; 
+  }
+  $d =~ s/R(\d+)/2018+$1/e ; # 令和のRが頭についた年は、西暦に変換する。
+  return Time::Piece -> strptime ( $d , '%Y/%m/%d' ) ; 
+}
+
+## ヘルプの扱い
+sub VERSION_MESSAGE {}
+sub HELP_MESSAGE {
+  use FindBin qw[ $Script ] ; 
+  $ARGV[1] //= '' ;
+  open my $FH , '<' , $0 ;
+  while(<$FH>){
+    s/\$0/$Script/g ;
+    print $_ if s/  =head1// .. s/  =cut// and $ARGV[1] =~ /  o(p(t(i(o(ns?)?)?)?)?)?$/i ? m/  \s+\-/ : 1;
+  }
+  close $FH ;
+  exit 0 ;
+}
+
+
+=encoding utf8
+
+=head1 
+
+  $0 ファイル名 [ファイル名] ..
+
+
+  目的: 
+    厚労省オープンデータの「小口資金等の特例貸付」のcsvファイル(4行)を、BigQueryに使える様にする。
+
+  オプション : 
+    -a ; ファイル名を最初に出力する。
+
+  気になること: 
+    * 年末年始付近で月日表示の年をどう取り扱えば良いのか気になるので、元のcsvファイルがどういう文字列を格納していたのか気になる。
+
+=cut
+
+
