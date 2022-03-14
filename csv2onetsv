@@ -1,14 +1,14 @@
 #!/usr/bin/perl
 use strict ;
 use warnings ; 
-use feature 'say' ;
-use Time::Piece ; # qw [ ONE_DAY ]; 
-use Encode qw[ decode_utf8 ] ; 
-use utf8 ;
-use Carp ;
-use Getopt::Std ; getopts 'aE:it:1:34' , \my%o ;
 use autodie 'open' ;
+use feature 'say' ;
+use Encode qw[ decode_utf8 ] ; 
+use Getopt::Std ; getopts 'aE:it:1:34' , \my%o ;
 use Term::ANSIColor qw [ :constants ] ; $Term::ANSIColor::AUTORESET = 1 ;
+use Text::Glob qw [ match_glob ] ;
+use Time::Piece ; # qw [ ONE_DAY ]; 
+use utf8 ;
 
 sub div ($) ; # 千進法区切り(数値の3桁ごとのコンマ)または万進法区切り(4桁ごとのアンダーバー)をする。
 * div = $o{3}?sub($){$_[0]=~s/(?<=\d)(?=(\d\d\d)+($|\D))/,/gr}:$o{4}?sub($){$_[0]=~s/(?<=\d)(?=(\d{4})+($|\D))/_/gr}:sub($){$_[0]} ;
@@ -22,8 +22,9 @@ say join $osep , @head if 0 ne ( $o{1} // '' ) ;
 
 # 除外するファイル
 my %exclude ; 
-$exclude { $_ } = 1 for map { glob $_ } exists $o{E} ? split /,/ , $o{E} : () ; 
-
+#$exclude { $_ } = 1 for map { match_glob ($_) } exists $o{E} ? split /,/ , $o{E} : () ; # match_globでなくてglobだと{a,b}が使えない。
+#$exclude { $_ } = 1 for exists $o{E} ? split /,/ , $o{E} : () ; # match_globでなくてglobだと{a,b}が使えない。
+$o{E} //= '' ;
 
 # メイン
 binmode STDOUT , "utf8" ;
@@ -32,7 +33,8 @@ my $fn ; # ファイル名
 END { say "\@ARGV=@ARGV" if $? != 0 } ;
 
 for $fn ( @ARGV ) { 
-  next if $exclude { $fn } ; 
+  #next if $exclude { $fn } ; 
+  next if match_glob ( $o{E} , $fn ) ;
   say qq[# $fn] if $o{a} ; # ファイル名の表示
   & each_file ( $fn ) ; 
 }
@@ -123,7 +125,7 @@ sub HELP_MESSAGE {
 
     -1 0 : 先頭行の変数名の並びを出力しない。
     -a ; ファイル名を最初に出力する。
-    -E str ; 除外するファイルの指定。2個以上有る場合はコンマ(,)で区切る。ワイルドカードも使用可。 -E 'LWSF220[12]*.csv' のように指定する。
+    -E str ; 除外するファイルの指定。ワイルドカードも使用可。 -E 'LWSF220[12]*.csv' のように指定する。
     -t 0 : tsvでなくてcsvで出力する。
 
     -3 : 数値を3桁区切りで,(コンマ)を挿入。千進法で読みやすくする。
@@ -136,13 +138,13 @@ sub HELP_MESSAGE {
 
     $0 -a -E '*220307*'  *.csv  # 
     tabs -20 ; $0 -E LWSF220307T1357.csv L*csv # タブ文字間隔を20にして、実行。
-    $0 -t0 -E 'LWS22{0307,0126,0202}T*.csv' L*csv > out.csv 
+    $0 -t0 -E 'LWSF22{0307,0126,0202}T????.csv' L*csv
 
   開発メモ: 
 
     * 年末年始付近で月日表示の年をどう取り扱えば良いのか気になるので、元のcsvファイルがどういう文字列を格納していたのか気になる。
     * 厚労省の用意する「小口資金等の特例貸付」のcsvファイルは、今後用意するファイルの形式が変わることがあり得る。
-       * それにそなえて、JSONで列名の日本語も格納すること、及び、列番号を出力させる(c1,c2,c3..などとする)ことも考えたが、未実装。
+       * それに備えて、JSONで列名の日本語も格納すること、及び、列番号を出力させる(c1,c2,c3..などとする)ことも考えたが、未実装。
 
 =cut
 
