@@ -47,7 +47,7 @@ END { say "\@ARGV=@ARGV" if $? != 0 } ;
 END { 
   exit if 0 eq ( $o{2} //'' ) ;
   $rows = "1 + $rows" if ! $opt10 ; 
-  say STDERR BOLD CYAN FAINT "出力行数: $rows ; 処理されたファイル数: $files ; 除外されたファイル: @excluded ; 経過秒数 : ", tv_interval ( $t0 ) ; 
+  say STDERR BOLD CYAN FAINT "出力行数: $rows ; 処理されたファイル数: $files ; 除外されたファイル: @excluded ; 経過秒数 : ", tv_interval $t0 ; 
 }
 
 sub each_file ( $ ) { 
