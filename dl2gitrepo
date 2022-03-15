@@ -1,0 +1,136 @@
+#!/usr/bin/perl
+
+#use 5.030 ;  # 5.010 5.008 5.001 でも動作は確かめた。(2022-02-02T16:47:10.622+09:00)
+use strict ; 
+use autodie qw[ open ] ;
+use warnings ;
+use feature 'say' ;
+use File::Spec::Functions qw [ catfile ] ; 
+use FindBin qw[ $Script ] ;
+use Getopt::Std ; getopts '2p' , \my %o ; 
+use LWP::UserAgent ;  # cpan(m) Mozilla::CA をすること。
+use Mozilla::CA ; 
+use POSIX qw [ strftime ] ; 
+use Term::ANSIColor qw[ :constants ] ; $Term::ANSIColor::AUTORESET = 1 ;
+use Time::HiRes qw[ gettimeofday tv_interval ] ; 
+use Time::Local qw[ timegm ] ; # タイムゾーンに依存する時差を計算するため
+use utf8 ; 
+binmode STDOUT , 'utf8 ' ; 
+binmode STDERR , 'utf8 ' ; 
+
+my $t0 ;
+BEGIN { $t0 = [ gettimeofday ] } ; 
+do { & HELP_MESSAGE ; exit } if $#ARGV == -1 ; # 引数が無い場合は、ヘルプを表示して終了。
+& main_parameters ( my $dest_dir , my $file_url , my $comment , my $file_name ) ; # fnはfile name
+& download_file ( $file_url , my $file_content , my $when ) ; # インターネット経由でファイルをダウンロードする。
+& write_file ( $dest_dir , $file_name , $file_content , my $last_modified, my $bytes , my $lines )  ; #ファイル書込と
+& run_git ( $file_name, qq[ $comment ${lines}行${bytes}バイト $when $last_modified.] ) ; # GITのコマンド起動
+exit 0 ; 
+END{ say STDERR GREEN BOLD FAINT & dt3 , "\t" , "プログラム実行時間($Script) : ", sprintf "%0.3f 秒", tv_interval $t0 } ## 終了処理
+
+sub main_parameters (  $$$$ ) { 
+  $_[0] =  qx[ cd $ARGV[0] ; pwd ] =~ s/\n$//r ; # このプログラムの作業ディレクトリを得る。
+  $_[1] = $ARGV[1] // 'https://www.mhlw.go.jp/content/life_welfare_small_fund.csv' ; # 取得するファイルのURI
+  $_[2] = $ARGV[2] // '' ; # GITのコミットに残すメッセージの *最初* の部分になる。ファイルの中身を表すデータの名前を想定。
+  $_[3] = $_[1] =~ s/^https?:\/\/.*\///r ; # 作業ディレトクリ上でのファイル名。 file name.
+}
+
+sub download_file ( $ $$ ) { 
+  say STDERR YELLOW BOLD & dt3 , qq[ ダウンロード開始: $_[0]] ; ## 端末出力 ($commentと$lmmは出さないことにした)"\tpwd=" , qx[ pwd ] =~ s/\n$//r 
+  my $ua = LWP::UserAgent -> new ; $ua -> timeout ( 10 ) ; # <-- 10秒は適切だろうか?
+  my $res = $ua -> get ( $_[0] ) ; 
+  $_[1] = $res -> is_success ? $res -> content : BRIGHT_RED BOLD $res -> status_line ; # (データ)ファイルに残す内容。
+  do{ say STDERR RED BOLD &dt3, "\t$res" ; exit } unless $o{2} || $res->is_success ; # -2も指定されずにHTTPエラーも発生したら、処理は終了。
+  $_[2] = dt2 () ; # Retreived Date Time 取得日時
+}
+
+sub write_file ( $$$ $$$ ) { 
+  chdir $_[0] or die $_[0] ; 
+  $_[3] = do { my $t = [ stat $_[1] ]->[9] ; defined $t ? & LM ( $t ) : '' } ; # 取得するファイルが最後に変更された日時
+  do { open my $FH , '>' , $_[1] ; print {$FH} $_[2] } ; # ファイルに取得した内容をここで保存する。
+  $_[4] = & d3 ( qx [ cat $_[1] | wc -c ] =~ s/\n$//r ) ; # バイトサイズ
+  $_[5] = & d3 ( qx [ cat $_[1] | wc -l ] =~ s/\n$//r ) ; # 行数
+}
+
+sub run_git ( $$ ) { 
+  exit if do { qx [ git add $_[0] ; git diff --cached ] =~ m/^\s*$/ } ;  # diff の内容が無いなら、ここで終了。ゼロバイトとも限らないと思い、正規表現を用いた。# <-- - これで良い?
+  my $another = qx [ git diff --stat -- $_[0] | tail -1 ] =~ s/\n$//r ; #  「2 files changed, 11 insertions(+), 6 deletions(-)」のような情報を取り出す。
+  my $cmd = qq[git reset --mix ; git add $_[0] ; git status -s | grep -F $_[0] && git commit -q -m '$_[1]' -m '$another'] ;
+  $cmd .= ' && git push' if $o{p} ;
+  qx[ $cmd ] ;
+  say STDERR YELLOW BOLD FAINT & dt3 , "\t", $cmd if $? == 0 ; ## 実行するコマンドの(端末)出力; git 2.29だとcommitがなされた時のみsuccessになるようだが、ドキュメント記載では無い。
+}
+
+sub LM ( $ ) { # 長々としたメッセージになる
+  my $message1 = '直前版の最近の存続確認は' ; # : strftime '%Y-%m-%d %H:%M', localtime $_[0] ;
+  my $delta = time - $_[0] ; 
+  my ( $days, $sec ) = ( int $delta / 86400 , $delta % 86400 ) ;
+  #my $dhms = do { my $h = int $sec / 3600 ; my $m = int ($sec - $h*3600) / 60 ; sprintf 'P%dT%02d:%02d:%02d' , $days, $h , $m , $sec % 60 } ;  
+  my $dhms = do { my $h = int $sec / 3600 ; my $m = int ($sec - $h*3600) / 60 ; 
+    $days != 0 ? sprintf '%d日%02d時間%02d分%02d秒前' , $days, $h , $m , $sec % 60 :
+    $h != 0 ? sprintf '%%02d時間%02d分%02d秒前' ,  $h , $m , $sec % 60 :
+    $m != 0 ? sprintf '%02d分%02d秒前' , $m , $sec % 60 :    sprintf '%02d秒前' , $sec ;
+  } ;  
+  return "($message1$dhms )" ; 
+}
+
+# 関数 dt2 : その時点の日時を0.01秒単位(10ミリ秒単位)で、日時記録を残すようにする。
+sub dt2 { 
+  my $t = [ gettimeofday ] ; 
+  return strftime ('%B%d日(%a)%H時%M分' , localtime $t->[0] ) ;
+  my $z = do { my $d = timegm(localtime)-timegm(gmtime) ; sprintf '%+03d:%02d', $d/3600, $d/60%60 } ;
+  strftime( '%Y-%m-%d %H:%M:%S.' . sprintf("%02d", $t->[1] / 1e4 ) . $z , localtime( $t->[0] ) ) 
+}
+
+# 関数 dt3 : その時点の日時を0.001秒単位(ミリ秒単位)で、日時記録を残すようにする。
+sub dt3 { my $t = [ gettimeofday ] ; strftime( "%Y-%m-%d %H:%M:%S." . sprintf("%03d", $t->[1] / 1e3 ) , localtime( $t->[0] ) ) }
+
+# 数を3桁区切りに変換する。
+sub d3 ($) { $_[0] =~ s/(?<=\d)(?=(\d\d\d)+($|\D))/,/gr } ; 
+
+## ヘルプ (オプション --help が与えられた時に、動作する)
+sub VERSION_MESSAGE {}
+sub HELP_MESSAGE {
+  use FindBin qw[ $Script ] ; 
+  $ARGV[1] //= '' ;
+  open my $FH , '<' , $0 ;
+  while(<$FH>){
+    s/\$0/$Script/g ;
+    print $_ if s/^=head1// .. s/^=cut// and $ARGV[1] =~ /^o(p(t(i(o(ns?)?)?)?)?)?$/i ? m/^\s+\-/ : 1;
+  }
+  close $FH ;
+  exit 0 ;
+}
+
+=encoding utf8
+
+=head1
+
+$0 REPO URL [GITのコミットメッセージに残すコメント]
+  
+  このコマンドの実行には、通常2個以上の引数を必要とする。
+  1番目の引数であるREPOは、GITのレポジトリであるローカルのディレクトリの名前。
+  2番目の引数であるURLは、保管したいファイル名を示すURLである。
+    たとえば、「https://www.mhlw.go.jp/content/life_welfare_small_fund.csv」
+  3番目の引数は、GITのコミットのメッセージに小さく残すコメントである。
+    たとえば「緊急小口資金等の特例貸付」と指定することで、後でGITのログを読むのが楽になる。
+
+ オプション: 
+   -p : git pushも行う。
+   -2 : ファイルの取得に失敗しても、そのHTTPエラーのメッセージを保存する。
+
+ 目的: 
+   厚労省オープンデータの「緊急小口資金等の特例貸付」のCSVファイルをGITレポジトリに保管する。
+   他にも、URLで指定できる特定のファイルを、(cronで定期的にダウンロードして) git レポジトリに保管する。
+
+ 必要な準備: 
+   1. GITレポジトリを用意すること。そのレポジトリにするディレクトリで、"git init" を実行しておくこと。
+   2. Mozilla::CAがなければ、"cpan Mozilla::CA" または "cpanm Mozilla::CA" のコマンドを走らせること。
+    そうしないと、「500 Can't verify SSL peers without knowing which Certificate Authorities to trust」となる。
+
+ 開発上のメモ : 
+   * chdir の変数において ~USERNAME の書式が使えなかったので、内部のプログラムにて少し複雑なシステムコマンドを使うことにした。
+
+=cut
+
+ 
