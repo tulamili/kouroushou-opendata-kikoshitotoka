@@ -6,7 +6,7 @@ use feature 'say' ;
 use File::Copy qw[ copy ] ;
 use File::Spec::Functions qw [ catfile ] ; 
 use FindBin qw[ $Bin $Script ] ;
-use Getopt::Std ; getopts '2:fh:t:U' , \my %o ; 
+use Getopt::Std ; getopts '1:2:fh:t:U' , \my %o ; 
 use POSIX qw [ strftime ] ; 
 use Term::ANSIColor qw[ :constants ] ; $Term::ANSIColor::AUTORESET = 1 ;
 use Time::HiRes qw[ gettimeofday tv_interval ] ; 
@@ -18,6 +18,7 @@ binmode STDERR , 'utf8' ;
 my $t0 ;
 $o{h} //= 'LWSF' ; 
 $o{t} //= '.csv' ;
+my $opt10 = 0 eq ($o{1}//'') ;
 my $opt20 = 0 eq ($o{2}//'') ;
 
 BEGIN { $t0 = [ gettimeofday ] } ; 
@@ -45,6 +46,7 @@ else {
 } # <^^
 say STDERR FAINT YELLOW "Copy Done : $srcfile --> " , $newname unless $opt20 ;
 die "$newname creation failed.\n" unless -e $newname ; 
+say $newname unless $opt10 ; 
 exit 0 ; 
 
 # いろいろな関数 (上記でdt3だけを使っている。このプログラムを改造する際に使う場合があるかもしれないと思い残した。)
@@ -88,12 +90,14 @@ $0 FILE DIR
 
   指定されたファイル(FILE)を指定されたディレクトリ(DIR)に
   名前を LWSFyymmddThhm.csv に変えてコピーする。日時はファイルの最終変更日時を用いる。
+  オプションで -1 0 が指定されない限り、標準出力に新たに作られるファイルの名前が出力される。
 
  オプション: 
    -f     : ファイルの上書きを許容する。
    -h STR : 新しいファイル名の先頭の部分。未指定なら LWSF 
    -t STR : 新しいファイル名の末尾の部分。未指定なら .csv
    -2 0   : 標準エラー出力に、2次情報を出力しない。 
+   -1 0   : 標準出力に、新たに作成するファイルの名前を出力しない。
 
 
    -U     : 先頭のBOMを除去し、改行コードの"\r\n"の"\r"を除去する。
