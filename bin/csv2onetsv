@@ -4,8 +4,9 @@ use autodie 'open' ; # このuse auto文だけで起動時間が4ミリ秒縮ま
 use strict ;
 use warnings ; 
 use feature 'say' ;
+use Digest::MD5 qw[ md5_hex ] ;
 use Encode qw[ decode_utf8 ] ; 
-use Getopt::Std ; getopts 'aE:is:t:1:2:34' , \my%o ;
+use Getopt::Std ; getopts 'aE:ims:t:1:2:34' , \my%o ;
 use Term::ANSIColor qw [ :constants ] ; $Term::ANSIColor::AUTORESET = 1 ;
 use Text::Glob qw [ match_glob ] ;
 use Time::HiRes qw [ gettimeofday tv_interval ] ;
@@ -35,13 +36,15 @@ $o{E} //= '' ;
 binmode STDOUT , "utf8" ;
 binmode STDERR , "utf8" ;
 my $fn ; # ファイル名
-
+my %md5 ; # 各ファイルのmd5値を調べる
 my $rows = 0 ; # 行の連番
 my $files = 0 ; # 処理されたファイル数
 my @excluded ; # 除外されたファイル
 my $endf = '' ; # 最後に処理したファイルの名前 -- 動作確認の良いヒントになる。
 for $fn ( @ARGV ) { 
   do { push @excluded, $fn ; next } if match_glob ( $o{E} , $fn ) ;
+  next unless -f $fn ; # そのファイルが存在しないなら、読み飛ばす。
+  next if $o{m} && $md5 { md5_hex (`cat $fn`) } ++ ; # -m指定時に、もしも全く中身の同じファイルを処理対象にしそうになったら、読み飛ばす。
   say qq[# $fn] if $o{a} ; # ファイル名の表示
   & each_file ( $endf = $fn ) ; 
   $files ++ ; 
@@ -141,13 +144,14 @@ sub HELP_MESSAGE {
     -1 0 : 先頭行の変数名の並びを出力しない。
     -a ; ファイル名を最初に出力する。
     -E str ; 除外するファイルの指定。ワイルドカードも使用可。 -E 'LWSF220[12]*.csv' のように指定する。
+    -i : 入力したデータを各行について表示する。正しく動作しているか確認する場合に便利。
+    -m : 引数に与えたファイルについて、既に読み取ったファイルと全く同じ中身のファイルがあれば、読み取らない。
+    -s 1 : 連番を付加する。数値は始まる番号を指定。
     -t 0 : TSV形式でなくてCSV形式で出力する。
 
     -2 0 : 通常、標準エラーに出力される2次情報を、出力しない。
     -3 : 数値を3桁区切りで,(コンマ)を挿入。千進法で読みやすくする。
     -4 : 数値を4桁区切りで_(アンダーバー)を挿入。万進法で読みやすくする。
-    -i : 入力したデータを各行表示する。
-    -s 1 : 連番を付加する。数値は始まる番号を指定。
 
   利用例 : 
 
