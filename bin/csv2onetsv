@@ -39,10 +39,11 @@ my $fn ; # ファイル名
 my $rows = 0 ; # 行の連番
 my $files = 0 ; # 処理されたファイル数
 my @excluded ; # 除外されたファイル
+my $endf = '' ; # 最後に処理したファイルの名前 -- 動作確認の良いヒントになる。
 for $fn ( @ARGV ) { 
   do { push @excluded, $fn ; next } if match_glob ( $o{E} , $fn ) ;
   say qq[# $fn] if $o{a} ; # ファイル名の表示
-  & each_file ( $fn ) ; 
+  & each_file ( $endf = $fn ) ; 
   $files ++ ; 
 }
 exit 0 ;
@@ -54,7 +55,8 @@ END {
   say "\$?=$? ; \@ARGV=@ARGV" if $? != 0 ;
   exit if 0 eq ( $o{2} //'' ) ;
   $rows = "1 + $rows" if ! $opt10 ; 
-  say STDERR BOLD CYAN FAINT "出力行数: $rows ; 処理されたファイル数: $files ; 除外されたファイル: @excluded ; 実行時間 : ", sprintf '%0.3f 秒' , tv_interval $t0 ; 
+  my $sec = sprintf '%0.3f 秒' , tv_interval $t0 ;
+  say STDERR BOLD CYAN FAINT "出力行数: $rows ; 処理されたファイル数: $files ; 除外されたファイル: @excluded ; 最後に処理したファイル: $endf ; 実行時間 : ", $sec ;
 }
 
 sub each_file ( $ ) { 
@@ -76,7 +78,6 @@ sub each_file ( $ ) {
     my @F = split /,/ , $_ , -1 ; 
     die "A line contains its columns whose number is not 7" if @F != 7 ;
 
-    #$rows ++ ;
     $_ *= 1_0000_0000 for $F[-2] , $F[-1] ; # 最も右の2列を1億倍にする。
     my $days = shift @F ; # 最左列を取り出す
     my ($day1,$day2) = split /[\~～]/ , $days , 2 ;
