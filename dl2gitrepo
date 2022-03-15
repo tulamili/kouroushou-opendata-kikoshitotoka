@@ -50,7 +50,7 @@ sub download_file ( $ $$ ) {
 
 sub write_file ( $$$ $$$ ) { 
   chdir $_[0] or die $_[0] ; 
-  $_[3] = do { my $t = [ stat $_[1] ]->[9] ; defined $t ? & LM ( $t ) : '' } ; # 取得するファイルが最後に変更された日時
+  $_[3] = do { my $t = [ stat $_[1] ]->[9] ; defined $t ? & recent_modification ( $t ) : '' } ; # 取得するファイルが最後に変更された日時
   do { open my $FH , '>' , $_[1] ; print {$FH} $_[2] } ; # ファイルに取得した内容をここで保存する。
   $_[4] = & d3 ( qx [ cat $_[1] | wc -c ] =~ s/\n$//r ) ; # バイトサイズ
   $_[5] = & d3 ( qx [ cat $_[1] | wc -l ] =~ s/\n$//r ) ; # 行数
@@ -64,7 +64,7 @@ sub run_git ( $$ ) {
   say STDERR YELLOW BOLD FAINT & dt3 , "\t", $cmd if $? == 0 ; ## git 2.29だとcommitがなされた時のみsuccessになる模様。
 }
 
-sub LM ( $ ) { # 長々としたメッセージになる
+sub recent_modification ( $ ) { # 長々としたメッセージになる
   my $message1 = '直前版の最近の存続確認は' ; # : strftime '%Y-%m-%d %H:%M', localtime $_[0] ;
   my $delta = time - $_[0] ; 
   my ( $days, $sec ) = ( int $delta / 86400 , $delta % 86400 ) ;
@@ -77,8 +77,7 @@ sub LM ( $ ) { # 長々としたメッセージになる
 }
 
 sub dtJ { 
-  #my $t = [ gettimeofday ] ; 
-  strftime ('%B%d日(%a)%H時%M分' , localtime ) ; # $t->[0] ) ;
+  strftime ('%B%d日(%a)%H時%M分' , localtime ) ; # $t->[0] ) ; # ロケールが日本で無いと%Bが英語で表示されたりして変になるかも。
 }
 
 # 関数 dt2 : その時点の日時を0.01秒単位(10ミリ秒単位)で、日時記録を残すようにする。
