@@ -6,7 +6,7 @@ use autodie qw[ open ] ;
 use warnings ;
 use feature 'say' ;
 use File::Spec::Functions qw [ catfile ] ; 
-use FindBin qw[ $Script ] ;
+use FindBin qw[ $Bin $Script ] ;
 use Getopt::Std ; getopts '2p' , \my %o ; 
 use LWP::UserAgent ;  # cpan(m) Mozilla::CA をすること。
 use Mozilla::CA ; 
@@ -20,16 +20,17 @@ binmode STDERR , 'utf8 ' ;
 
 my $t0 ;
 BEGIN { $t0 = [ gettimeofday ] } ; 
-do { & HELP_MESSAGE ; exit } if $#ARGV == -1 ; # 引数が無い場合は、ヘルプを表示して終了。
+exec "$Bin/$Script --help" unless @ARGV ; # binmode STDERR がHELP_MESSAGEにて文字化けを起こすため
 & main_parameters ( my $dest_dir , my $file_url , my $comment , my $file_name ) ; # fnはfile name
 & download_file ( $file_url , my $file_content , my $when ) ; # インターネット経由でファイルをダウンロードする。
 & write_file ( $dest_dir , $file_name , $file_content , my $last_modified, my $bytes , my $lines )  ; #ファイル書込と
 & run_git ( $file_name, qq[ $comment ${lines}行${bytes}バイト $when $last_modified.] ) ; # GITのコマンド起動
 exit 0 ; 
-END{ 
-  exit if $ARGV[0] eq '--help' ;
-  say STDERR GREEN BOLD FAINT & dt3 , "\t" , "プログラム実行時間($Script) : ", sprintf "%0.3f 秒", tv_interval $t0 
-} ## 終了処理
+
+END { 
+  exit if '--help' eq ($ARGV[0]//'') ;
+  say STDERR GREEN BOLD FAINT & dt3 , "\t" , "プログラム実行時間($Script) : ", sprintf "%0.3f 秒", tv_interval $t0 ;
+} 
 
 sub main_parameters (  $$$$ ) { 
   $_[0] =  qx[ cd $ARGV[0] ; pwd ] =~ s/\n$//r ; # このプログラムの作業ディレクトリを得る。
@@ -44,7 +45,7 @@ sub download_file ( $ $$ ) {
   my $res = $ua -> get ( $_[0] ) ; 
   $_[1] = $res -> is_success ? $res -> content : BRIGHT_RED BOLD $res -> status_line ; # (データ)ファイルに残す内容。
   do{ say STDERR RED BOLD &dt3, "\t$res" ; exit } unless $o{2} || $res->is_success ; # -2も指定されずにHTTPエラーも発生したら、処理は終了。
-  $_[2] = dt2 () ; # Retreived Date Time 取得日時
+  $_[2] = dtJ () ; # Retreived Date Time 取得日時
 }
 
 sub write_file ( $$$ $$$ ) { 
@@ -56,19 +57,17 @@ sub write_file ( $$$ $$$ ) {
 }
 
 sub run_git ( $$ ) { 
-  exit if do { qx [ git add $_[0] ; git diff --cached ] =~ m/^\s*$/ } ;  # diff の内容が無いなら、ここで終了。ゼロバイトとも限らないと思い、正規表現を用いた。# <-- - これで良い?
-  my $another = qx [ git diff --stat --cached -- $_[0] | tail -1 ] =~ s/\n$//r ; #  「1 files changed, 11 insertions(+), 6 deletions(-)」のような情報を取り出す。
-  my $cmd = qq[git reset --mix ; git add $_[0] ; git status -s | grep -F $_[0] && git commit -q -m '$_[1] $another'] ;
-  $cmd .= ' && git push' if $o{p} ;
+  my $stat = do { `git reset --mix` ; `git add $_[0] ; git diff --stat --cached -- $_[0] | tail -1` =~ s/\n$//r } ; 
+  exit if $stat =~ m/^\s*$/ ; #  変更があれば、「1 files changed, 11 insertions(+), 6 deletions(-)」のような情報を取り出せる。
+  my $cmd =  "git commit -q -m '$_[1] $stat'" . ( $o{p} ? ' && git push' : '' ) ;
   qx[ $cmd ] ;
-  say STDERR YELLOW BOLD FAINT & dt3 , "\t", $cmd if $? == 0 ; ## 実行するコマンドの(端末)出力; git 2.29だとcommitがなされた時のみsuccessになるようだが、ドキュメント記載では無い。
+  say STDERR YELLOW BOLD FAINT & dt3 , "\t", $cmd if $? == 0 ; ## git 2.29だとcommitがなされた時のみsuccessになる模様。
 }
 
 sub LM ( $ ) { # 長々としたメッセージになる
   my $message1 = '直前版の最近の存続確認は' ; # : strftime '%Y-%m-%d %H:%M', localtime $_[0] ;
   my $delta = time - $_[0] ; 
   my ( $days, $sec ) = ( int $delta / 86400 , $delta % 86400 ) ;
-  #my $dhms = do { my $h = int $sec / 3600 ; my $m = int ($sec - $h*3600) / 60 ; sprintf 'P%dT%02d:%02d:%02d' , $days, $h , $m , $sec % 60 } ;  
   my $dhms = do { my $h = int $sec / 3600 ; my $m = int ($sec - $h*3600) / 60 ; 
     $days != 0 ? sprintf '%d日%02d時間%02d分%02d秒前' , $days, $h , $m , $sec % 60 :
     $h != 0 ? sprintf '%%02d時間%02d分%02d秒前' ,  $h , $m , $sec % 60 :
@@ -77,10 +76,14 @@ sub LM ( $ ) { # 長々としたメッセージになる
   return "($message1$dhms)" ; 
 }
 
+sub dtJ { 
+  #my $t = [ gettimeofday ] ; 
+  strftime ('%B%d日(%a)%H時%M分' , localtime ) ; # $t->[0] ) ;
+}
+
 # 関数 dt2 : その時点の日時を0.01秒単位(10ミリ秒単位)で、日時記録を残すようにする。
 sub dt2 { 
   my $t = [ gettimeofday ] ; 
-  return strftime ('%B%d日(%a)%H時%M分' , localtime $t->[0] ) ;
   my $z = do { my $d = timegm(localtime)-timegm(gmtime) ; sprintf '%+03d:%02d', $d/3600, $d/60%60 } ;
   strftime( '%Y-%m-%d %H:%M:%S.' . sprintf("%02d", $t->[1] / 1e4 ) . $z , localtime( $t->[0] ) ) 
 }
