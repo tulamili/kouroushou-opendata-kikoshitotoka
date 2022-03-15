@@ -15,12 +15,12 @@ use Term::ANSIColor qw[ :constants ] ; $Term::ANSIColor::AUTORESET = 1 ;
 use Time::HiRes qw[ gettimeofday tv_interval ] ; 
 use Time::Local qw[ timegm ] ; # タイムゾーンに依存する時差を計算するため
 use utf8 ; 
-binmode STDOUT , 'utf8 ' ; 
-binmode STDERR , 'utf8 ' ; 
+binmode STDOUT , 'utf8' ; 
+binmode STDERR , 'utf8' ; 
 
 my $t0 ;
 BEGIN { $t0 = [ gettimeofday ] } ; 
-exec "$Bin/$Script --help" unless @ARGV ; # binmode STDERR がHELP_MESSAGEにて文字化けを起こすため
+exec catfile ($Bin, $Script)." --help" unless @ARGV ; # binmode STDERR がHELP_MESSAGEにて文字化けを起こすため
 & main_parameters ( my $dest_dir , my $file_url , my $comment , my $file_name ) ; # fnはfile name
 & download_file ( $file_url , my $file_content , my $when ) ; # インターネット経由でファイルをダウンロードする。
 & write_file ( $dest_dir , $file_name , $file_content , my $last_modified, my $bytes , my $lines )  ; #ファイル書込と
