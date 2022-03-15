@@ -5,7 +5,7 @@ use strict ;
 use warnings ; 
 use feature 'say' ;
 use Encode qw[ decode_utf8 ] ; 
-use Getopt::Std ; getopts 'aE:ist:1:2:34' , \my%o ;
+use Getopt::Std ; getopts 'aE:is:t:1:2:34' , \my%o ;
 use Term::ANSIColor qw [ :constants ] ; $Term::ANSIColor::AUTORESET = 1 ;
 use Text::Glob qw [ match_glob ] ;
 use Time::HiRes qw [ gettimeofday tv_interval ] ;
@@ -25,7 +25,7 @@ my $osep = ( $o{t} // '' ) eq 0 ? ',' : "\t" ;
 # 最初の行に出力する文字列 (出力の変数の並び) 
 my $opt10 = 0 eq ( $o{1} // '' ) ; 
 my @head = qw [ retreived_at waiting_days term_start term_end term_days applications applications_acc provisions provisions_acc amount amount_acc ] ;
-unshift @head, 'id' if $o{s} ;
+unshift @head, 'id' if exists $o{s} ;
 say join $osep , @head if ! $opt10 ; # 0 ne ( $o{1} // '' ) ;
 
 # 除外するファイル
@@ -46,8 +46,12 @@ for $fn ( @ARGV ) {
   $files ++ ; 
 }
 exit 0 ;
-END { say "\@ARGV=@ARGV" if $? != 0 } ;
+
+# 終了時の処理
+
 END { 
+  exit if $ARGV[0] eq '--help' ;
+  say "\$?=$? ; \@ARGV=@ARGV" if $? != 0 ;
   exit if 0 eq ( $o{2} //'' ) ;
   $rows = "1 + $rows" if ! $opt10 ; 
   say STDERR BOLD CYAN FAINT "出力行数: $rows ; 処理されたファイル数: $files ; 除外されたファイル: @excluded ; 実行時間 : ", sprintf '%0.3f 秒' , tv_interval $t0 ; 
@@ -72,19 +76,19 @@ sub each_file ( $ ) {
     my @F = split /,/ , $_ , -1 ; 
     die "A line contains its columns whose number is not 7" if @F != 7 ;
 
-    $rows ++ ;
+    #$rows ++ ;
     $_ *= 1_0000_0000 for $F[-2] , $F[-1] ; # 最も右の2列を1億倍にする。
     my $days = shift @F ; # 最左列を取り出す
     my ($day1,$day2) = split /[\~～]/ , $days , 2 ;
     my $p1 = str2tp ( $day1 , $b0 ) ; # 期間開始日
     my $p2 = str2tp ( $day2 , $b0 ) ; # 期間終了日
     my @out ; 
-    push @out , $rows if $o{s} ;
-    push @out ,  $b0 -> strftime('%F') ;
-    push @out ,  ( $b0 - $p2 ) / 8_6400 ;
-    push @out ,  $p1 -> strftime('%F') ;
-    push @out ,  $p2 -> strftime('%F') ;
-    push @out ,  ( $p2 - $p1 ) / 8_6400 + 1 ;
+    push @out , $rows ++ + $o{s} if exists $o{s} ;
+    push @out , $b0 -> strftime('%F') ;
+    push @out , ( $b0 - $p2 ) / 8_6400 ;
+    push @out , $p1 -> strftime('%F') ;
+    push @out , $p2 -> strftime('%F') ;
+    push @out , ( $p2 - $p1 ) / 8_6400 + 1 ;
     push @out , @F ;
     $_ = div $_ for @out [ 4 .. $#out ] ; 
     say join $osep , @out ;
@@ -111,10 +115,10 @@ sub HELP_MESSAGE {
   open my $FH , '<' , $0 ;
   while(<$FH>){
     s/\$0/$Script/g ;
-    print $_ if s/  =head1// .. s/  =cut// and $ARGV[1] =~ /  o(p(t(i(o(ns?)?)?)?)?)?$/i ? m/  \s+\-/ : 1;
+    print $_ if s/^=head1// .. s/^=cut// and $ARGV[1] =~ /^o(p(t(i(o(ns?)?)?)?)?)?$/i ? m/^\s+\-/ : 1;
   }
   close $FH ;
-  exit 0 ;
+  exit 1 ;
 }
 
 
@@ -135,13 +139,13 @@ sub HELP_MESSAGE {
     -1 0 : 先頭行の変数名の並びを出力しない。
     -a ; ファイル名を最初に出力する。
     -E str ; 除外するファイルの指定。ワイルドカードも使用可。 -E 'LWSF220[12]*.csv' のように指定する。
-    -t 0 : tsvでなくてcsvで出力する。
+    -t 0 : TSV形式でなくてCSV形式で出力する。
 
     -2 0 : 通常、標準エラーに出力される2次情報を、出力しない。
     -3 : 数値を3桁区切りで,(コンマ)を挿入。千進法で読みやすくする。
     -4 : 数値を4桁区切りで_(アンダーバー)を挿入。万進法で読みやすくする。
     -i : 入力したデータを各行表示する。
-    -s : 連番を付加する。
+    -s 1 : 連番を付加する。数値は始まる番号を指定。
 
   利用例 : 
 
@@ -149,7 +153,8 @@ sub HELP_MESSAGE {
 
     $0 -a -E '*220307*'  *.csv  # 
     tabs -20 ; $0 -E LWSF220307T1357.csv L*csv # タブ文字間隔を20にして、実行。
-    $0 -t0 -E 'LWSF22{0307,0126,0202}T????.csv' L*csv
+    $0 -t0 -E 'LWSF22{0307,0126,0202}T????.csv' L*csv  # 除外するファイルを指定した例。-t0 でCSV 形式になる。
+    $0 -10 -s19 -10 -t0 *.csv  # 既存のCSV形式の出力に追加するために、先頭行無しの、開始番号を19に設定した例。
 
   開発メモ: 
 
