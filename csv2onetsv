@@ -59,14 +59,14 @@ END {
 
 sub each_file ( $ ) { 
   my $b0 = Time::Piece -> strptime ( do { $_[0] =~ m/(\d{6})/ ; $1 } , '%y%m%d' ) ; # 基準となる日をファイル名から採取する。 # base 
-  #my $b0 = $_[ 0 ] ;
   open my $FH , '<' , $_[0] ;
   while ( <$FH> ) { 
     chomp ; 
+    s/\r$// ; # Windows形式の改行に対応
     $_ = decode_utf8 ( $_ ) ;
     say FAINT YELLOW qq[<-- $_[0]:$.:$_] if $o{i} ; # 入力行を書き出す -i が指定されていた場合。デバッグ用途。
     if ( $. == 1 ) { 
-      if ( $_ ne "日付,貸付申請件数,累計貸付申請件数,貸付決定件数,累計貸付決定件数,貸付決定額,累計貸付決定額" ) { 
+      if ( $_ !~ m/^(\x{FEFF}?)日付,貸付申請件数,累計貸付申請件数,貸付決定件数,累計貸付決定件数,貸付決定額,累計貸付決定額$/ ) { # BOMに対応
        warn qq[The first line is out of the format : ] , "$_[0], " , BRIGHT_WHITE  qq["$_"] ; 
        return ; 
       }
