@@ -24,8 +24,8 @@ exec catfile ($Bin, $Script)." --help" unless @ARGV ; # binmode STDERR がHELP_M
 & main_parameters ( my $dest_dir , my $file_url , my $comment , my $file_name ) ; # fnはfile name
 & download_file ( $file_url , my $file_content , my $when ) ; # インターネット経由でファイルをダウンロードする。
 & write_file ( $dest_dir , $file_name , $file_content , my $last_modified, my $bytes , my $lines )  ; #ファイル書込と
-& run_git ( $file_name, qq[ $comment ${lines}行${bytes}バイト $when $last_modified.] ) ; # GITのコマンド起動
-exit 0 ; 
+& run_git ( $file_name, qq[ $comment ${lines}行${bytes}バイト $when $last_modified.] , my $exit_code ) ; # GITのコマンド起動
+exit $exit_code ; 
 
 END { 
   exit if '--help' eq ($ARGV[0]//'') ;
@@ -56,22 +56,23 @@ sub write_file ( $$$ $$$ ) {
   $_[5] = & d3 ( qx [ cat $_[1] | wc -l ] =~ s/\n$//r ) ; # 行数
 }
 
-sub run_git ( $$ ) { 
+sub run_git ( $$ $ ) { 
+  $_[2] = 0 ; # exit code ;
   my $stat = do { `git reset --mix` ; `git add $_[0] ; git diff --stat --cached -- $_[0] | tail -1` =~ s/\n$//r } ; 
-  exit if $stat =~ m/^\s*$/ ; #  変更があれば、「1 files changed, 11 insertions(+), 6 deletions(-)」のような情報を取り出せる。
+  do { $_[2] = 1 ; return } if $stat =~ m/^\s*$/ ; #  変更があれば、「1 files changed, 11 insertions(+), 6 deletions(-)」のような情報を取り出せる。
   my $cmd =  "git commit -q -m '$_[1] $stat'" . ( $o{p} ? ' && git push' : '' ) ;
   qx[ $cmd ] ;
   say STDERR YELLOW BOLD FAINT & dt3 , "\t", $cmd if $? == 0 ; ## git 2.29だとcommitがなされた時のみsuccessになる模様。
 }
 
 sub recent_modification ( $ ) { # 長々としたメッセージになる
-  my $message1 = '直前版の最近の存続確認は' ; # : strftime '%Y-%m-%d %H:%M', localtime $_[0] ;
+  my $message1 = '直前版の最近の存続確認は' ; #
   my $delta = time - $_[0] ; 
   my ( $days, $sec ) = ( int $delta / 86400 , $delta % 86400 ) ;
-  my $dhms = do { my $h = int $sec / 3600 ; my $m = int ($sec - $h*3600) / 60 ; 
+  my $dhms = do { my $h = int $sec / 3600 ; my $m = int 1/60 * ($sec - $h*3600) ; # 括弧の使い方に問題があったのでなおした。
     $days != 0 ? sprintf '%d日%02d時間%02d分%02d秒前' , $days, $h , $m , $sec % 60 :
-    $h != 0 ? sprintf '%%02d時間%02d分%02d秒前' ,  $h , $m , $sec % 60 :
-    $m != 0 ? sprintf '%02d分%02d秒前' , $m , $sec % 60 :    sprintf '%02d秒前' , $sec ;
+    $h != 0 ? sprintf '%d時間%02d分%02d秒前' ,  $h , $m , $sec % 60 :
+    $m != 0 ? sprintf '%d分%02d秒前' , $m , $sec % 60 :    sprintf '%d秒前' , $sec ; 
   } ;  
   return "($message1$dhms)" ; 
 }
@@ -119,6 +120,9 @@ $0 REPO URL [GITのコミットメッセージに残すコメント]
     たとえば、「https://www.mhlw.go.jp/content/life_welfare_small_fund.csv」
   3番目の引数は、GITのコミットのメッセージに小さく残すコメントである。
     たとえば「緊急小口資金等の特例貸付」と指定することで、後でGITのログを読むのが楽になる。
+
+  返り値 : Unix系コマンドとして利用できるexit codeは、ダウンロードしたファイルの変更があれば
+           0(true)であり、無ければ1(false)である。 $0 && foo のような使い方に便利。
 
  オプション: 
    -p : git pushも行う。
