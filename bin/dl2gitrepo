@@ -5,6 +5,7 @@ use strict ;
 use autodie qw[ open ] ;
 use warnings ;
 use feature 'say' ;
+use Encode qw[ decode_utf8 ] ;
 use File::Spec::Functions qw [ catfile ] ; 
 use FindBin qw[ $Bin $Script ] ;
 use Getopt::Std ; getopts '2p' , \my %o ; 
@@ -33,9 +34,9 @@ END {
 } 
 
 sub main_parameters (  $$$$ ) { 
-  $_[0] =  qx[ cd $ARGV[0] ; pwd ] =~ s/\n$//r ; # このプログラムの作業ディレクトリを得る。
-  $_[1] = $ARGV[1] // 'https://www.mhlw.go.jp/content/life_welfare_small_fund.csv' ; # 取得するファイルのURI
-  $_[2] = $ARGV[2] // '' ; # GITのコミットに残すメッセージの *最初* の部分になる。ファイルの中身を表すデータの名前を想定。
+  $_[0] =  qx[ mkdir -p $ARGV[0] ; cd $ARGV[0] ; pwd ] =~ s/\n$//r ; # このプログラムの作業ディレクトリを得る。もしも最初から通常ファイルの場合はどうするか?
+  $_[1] = $ARGV[1] // 'https://www.mhlw.go.jp/content/life_welfare_small_fund.csv' ; # 取得するファイルのURI # 日本語を含むエスケープ?に対応したいかも
+  $_[2] = decode_utf8 ( $ARGV[2] // '' ) ; # GITのコミットに残すメッセージの *最初* の部分になる。ファイルの中身を表すデータの名前を想定。
   $_[3] = $_[1] =~ s/^https?:\/\/.*\///r ; # 作業ディレトクリ上でのファイル名。 file name.
 }
 
@@ -139,6 +140,7 @@ $0 REPO URL [GITのコミットメッセージに残すコメント]
 
  開発上のメモ : 
    * chdir の変数において ~USERNAME の書式が使えなかったので、内部のプログラムにて少し複雑なシステムコマンドを使うことにした。
+   * $ARGV[0] で与えられたディレクトリ名と同じ名前の通常ファイルが存在していた場合に対応できていない。
    * git のコマンドにおいて、対象となるファイルをそれまでaddしてなかった場合の挙動を変えた。--cachedを加えた。きちんといつでも動くだろうか?
      * 「直前版の最近の存続確認」と言っても、git のレポジトリに登録されたものとの差違を比較もして、ローカルのファイルの最終更新時刻を見てるので、概念が混乱/混同してるかも。
    * dt2の挙動を変えた。名が体を表してないのでリファクタが必要。
