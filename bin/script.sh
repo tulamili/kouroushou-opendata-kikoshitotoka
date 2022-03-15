@@ -10,7 +10,7 @@ sleep $(( $RANDOM % 3 )) ; # ランダムな秒数待ってみる。3秒以内�
 
 cd $selfdir 
 proc1="dl2gitrepo $fetched https://www.mhlw.go.jp/content/life_welfare_small_fund.csv 緊急小口資金等の特例貸付"
-proc2="copyDTfile -U $fetched/life_welfare_small_fund.csv $renamed"
+proc2="copyDTfile -U -10 $fetched/life_welfare_small_fund.csv $renamed"
 proc3="cd $renamed ; csv2onetsv -m -s1 -t0 -E 'LWSF22{0126,0202,0307}T????.csv' LWSF2?????T????.csv >| $binded/since220204.csv"
 proc4="git add $binded/since220204.csv $renamed ; git commit -m 'since220204.csvとその材料の更新(または作成).' "; 
 proc5="dufolder -G1 `git rev-parse --show-superproject-working-tree --show-toplevel` ; git push "  ;
