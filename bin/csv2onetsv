@@ -83,7 +83,7 @@ sub each_file ( $ ) {
     my $p1 = str2tp ( $day1 , $b0 ) ; # 期間開始日
     my $p2 = str2tp ( $day2 , $b0 ) ; # 期間終了日
     my @out ; 
-    push @out , $rows ++ + $o{s} if exists $o{s} ;
+    push @out , $rows + $o{s} if exists $o{s} ;
     push @out , $b0 -> strftime('%F') ;
     push @out , ( $b0 - $p2 ) / 8_6400 ;
     push @out , $p1 -> strftime('%F') ;
@@ -92,6 +92,7 @@ sub each_file ( $ ) {
     push @out , @F ;
     $_ = div $_ for @out [ 4 .. $#out ] ; 
     say join $osep , @out ;
+    $rows ++ ;
   }
 }
 
