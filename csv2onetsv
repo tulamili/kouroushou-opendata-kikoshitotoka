@@ -1,7 +1,8 @@
 #!/usr/bin/perl
+#use 5.001 ;
+use autodie 'open' ; # このuse auto文だけで起動時間が4ミリ秒縮まるという不可解なことが発生。
 use strict ;
 use warnings ; 
-use autodie 'open' ;
 use feature 'say' ;
 use Encode qw[ decode_utf8 ] ; 
 use Getopt::Std ; getopts 'aE:ist:1:2:34' , \my%o ;
@@ -11,7 +12,9 @@ use Time::HiRes qw [ gettimeofday tv_interval ] ;
 use Time::Piece ; # qw [ ONE_DAY ]; 
 use utf8 ;
 
-my $t0 = [ gettimeofday ] ; 
+my $t0 ; 
+BEGIN { $t0 = [ gettimeofday ] } ; 
+
 # 特別な関数
 sub div ($) ; # 千進法区切り(数値の3桁ごとのコンマ)または万進法区切り(4桁ごとのアンダーバー)をする。
 * div = $o{3}?sub($){$_[0]=~s/(?<=\d)(?=(\d\d\d)+($|\D))/,/gr}:$o{4}?sub($){$_[0]=~s/(?<=\d)(?=(\d{4})+($|\D))/_/gr}:sub($){$_[0]} ;
@@ -47,7 +50,7 @@ END { say "\@ARGV=@ARGV" if $? != 0 } ;
 END { 
   exit if 0 eq ( $o{2} //'' ) ;
   $rows = "1 + $rows" if ! $opt10 ; 
-  say STDERR BOLD CYAN FAINT "出力行数: $rows ; 処理されたファイル数: $files ; 除外されたファイル: @excluded ; 経過秒数 : ", tv_interval $t0 ; 
+  say STDERR BOLD CYAN FAINT "出力行数: $rows ; 処理されたファイル数: $files ; 除外されたファイル: @excluded ; 実行時間 : ", sprintf '%0.3f 秒' , tv_interval $t0 ; 
 }
 
 sub each_file ( $ ) { 
