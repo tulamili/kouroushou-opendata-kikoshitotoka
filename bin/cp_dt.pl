@@ -39,6 +39,7 @@ die "$newname is a directory. \n" if -d $newname ;  # コピー先のファイ�
 die "$newname already exists. \n" if -e $newname && ! $o{f} ; # コピー先にファイルが存在する場合、-fの指定が無ければ停止。
 copy $srcfile , $newname or die ; 
 say STDERR FAINT YELLOW "Copy Done : $srcfile --> " , $newname unless $opt20 ;
+die "$newname creation failed.\n" unless -e $newname ; 
 exit 0 ; 
 
 # いろいろな関数 (上記でdt3だけを使っている。このプログラムを改造する際に使う場合があるかもしれないと思い残した。)
