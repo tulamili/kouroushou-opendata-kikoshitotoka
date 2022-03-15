@@ -26,7 +26,10 @@ do { & HELP_MESSAGE ; exit } if $#ARGV == -1 ; # 引数が無い場合は、ヘ�
 & write_file ( $dest_dir , $file_name , $file_content , my $last_modified, my $bytes , my $lines )  ; #ファイル書込と
 & run_git ( $file_name, qq[ $comment ${lines}行${bytes}バイト $when $last_modified.] ) ; # GITのコマンド起動
 exit 0 ; 
-END{ say STDERR GREEN BOLD FAINT & dt3 , "\t" , "プログラム実行時間($Script) : ", sprintf "%0.3f 秒", tv_interval $t0 } ## 終了処理
+END{ 
+  exit if $ARGV[0] eq '--help' ;
+  say STDERR GREEN BOLD FAINT & dt3 , "\t" , "プログラム実行時間($Script) : ", sprintf "%0.3f 秒", tv_interval $t0 
+} ## 終了処理
 
 sub main_parameters (  $$$$ ) { 
   $_[0] =  qx[ cd $ARGV[0] ; pwd ] =~ s/\n$//r ; # このプログラムの作業ディレクトリを得る。
@@ -54,8 +57,8 @@ sub write_file ( $$$ $$$ ) {
 
 sub run_git ( $$ ) { 
   exit if do { qx [ git add $_[0] ; git diff --cached ] =~ m/^\s*$/ } ;  # diff の内容が無いなら、ここで終了。ゼロバイトとも限らないと思い、正規表現を用いた。# <-- - これで良い?
-  my $another = qx [ git diff --stat -- $_[0] | tail -1 ] =~ s/\n$//r ; #  「2 files changed, 11 insertions(+), 6 deletions(-)」のような情報を取り出す。
-  my $cmd = qq[git reset --mix ; git add $_[0] ; git status -s | grep -F $_[0] && git commit -q -m '$_[1]' -m '$another'] ;
+  my $another = qx [ git diff --stat --cached -- $_[0] | tail -1 ] =~ s/\n$//r ; #  「1 files changed, 11 insertions(+), 6 deletions(-)」のような情報を取り出す。
+  my $cmd = qq[git reset --mix ; git add $_[0] ; git status -s | grep -F $_[0] && git commit -q -m '$_[1] $another'] ;
   $cmd .= ' && git push' if $o{p} ;
   qx[ $cmd ] ;
   say STDERR YELLOW BOLD FAINT & dt3 , "\t", $cmd if $? == 0 ; ## 実行するコマンドの(端末)出力; git 2.29だとcommitがなされた時のみsuccessになるようだが、ドキュメント記載では無い。
@@ -71,7 +74,7 @@ sub LM ( $ ) { # 長々としたメッセージになる
     $h != 0 ? sprintf '%%02d時間%02d分%02d秒前' ,  $h , $m , $sec % 60 :
     $m != 0 ? sprintf '%02d分%02d秒前' , $m , $sec % 60 :    sprintf '%02d秒前' , $sec ;
   } ;  
-  return "($message1$dhms )" ; 
+  return "($message1$dhms)" ; 
 }
 
 # 関数 dt2 : その時点の日時を0.01秒単位(10ミリ秒単位)で、日時記録を残すようにする。
