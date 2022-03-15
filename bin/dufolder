@@ -5,22 +5,27 @@ use warnings ;
 use feature qw [ say state ] ;
 use Cwd ; 
 use File::Spec ; 
-use Getopt::Std ; getopts '.,:b:i:B:G:' , \my %o ; 
+use Getopt::Std ; getopts '.,:b:i:l:B:G:' , \my %o ; 
 use List::Util qw[ max sum0 ] ;
 use POSIX qw [ strftime ] ; 
 use Term::ANSIColor qw[ :constants ] ; $Term::ANSIColor::AUTORESET = 1 ;
 binmode STDOUT , ':utf8' ;
 
 $o{b} //= 512 ; # stat関数で1個のファイルのブロック数を得た場合に、それを何倍したら、ディスクを占有するバイト数になるか。
-my $optI0 = 0 eq ($o{i} // '' ) ; # -i0の指定があるか否か。
+my $optI0 = 0 eq ($o{i} // '' ) ; # -i0の指定があるか否か。 inodeで一致するものは1個しか受け付けないようにする。
+my $optL0 = 0 eq ($o{l} // '' ) ; # -l0の指定があるか否か。stat 関数を使うか lstat 関数を使うかを指定。
+my $optc0 = 0 eq ($o{','}//'' ) ; # -,0の指定があるか否か。千進法区切りで,を使うか否かを指定。
 $ARGV[0] = '.' if @ARGV == 0 ;
 
 # 特殊な関数
 
-sub d3 ($) { $_[0] =~ s/(?<=\d)(?=(\d\d\d)+($|\D))/,/gr } ; # 数を3桁区切りに変換する。
-if ( 0 eq ( $o{','} // '') ) { * d3 = sub ($) { $_[0] } } ; # -,0が指定されたら3桁区切りにしない。
+sub d3 ($)  ; # 数を3桁区切りに変換することもできるようにする。# -,0が指定されたら3桁区切りにしない。
+* d3 = $optc0 ? sub ( $ ) { $_[0] } : sub ( $ ) { $_[0] =~ s/(?<=\d)(?=(\d\d\d)+($|\D))/,/gr } ; 
+sub xstat ( $ ) ; #{ lstat $_ } ; 
+* xstat = $optL0 ? sub ( $ ) { stat $_ } : sub ( $ ) { lstat $_ } ; # if $optL0 ;
 
 # メインとなる部分
+
 my $datetime = strftime ( '%Y-%m-%d(%a) %H:%M:%S %Z(%z)', localtime () ) ; 
 my @files ; # 探索したファイルを収納する。
 my @visible ; # 非ドットファイルの全体。
@@ -41,13 +46,13 @@ sub getFiles ( $ $$ ) {
   state $inodes ;
   state $c2 = do { File::Spec -> catfile ( '' , '.' ) } ; # ディレクトリ階層の区切りの直後にドットがあるパターン "/."
   my @found = split /\n/ , qx [ find $_[0] ] , 0 ; # find コマンドで見つけたファイルを格納。
-  @found = grep { ! $inodes -> { ( stat $_ ) [ 1 ] } ++ }  @found if ! $optI0 ; # inodeで過去に一致したものは除去する
+  @found = grep { ! $inodes -> { ( xstat $_ ) [ 1 ] } ++ }  @found if ! $optI0 ; # inodeで過去に一致したものは除去する
   push @{ $_[1] } , @found ;
   push @{ $_[2] } , grep { ! m/\Q$c2\E/ } @found ; 
 }
 
 sub prepCommands ( $$$ $$$$ ) { 
-  sub sumdu ( @ ) { sum0 map { my @s = stat $_ ; max ( $s[7] , $o{b} * $s[12] ) } @_ } # <-- Unixコマンドduと同じ事をしたつもり。
+  sub sumdu ( @ ) { sum0 map { my @s = xstat $_ ; max ( $s[7] , $o{b} * $s[12] ) } @_ } # <-- Unixコマンドduと同じ事をしたつもり。
   my ($b1,$b2) = map { sumdu ( @{ $_ [ $_ ] } ) } 0 , 1 ; # バイト単位の数値なのでbを変数名に用いた。
   my ($l1,$l2) = map { scalar @{ $_ [ $_ ] } } 0 , 1 ; # 配列の長さ l 
   $_[3] = sprintf "du: %s / %s = %0.3f", d3 $b1, d3 $b2 , $b1 / $b2 ;
@@ -113,13 +118,14 @@ sub HELP_MESSAGE {
 
  利用例: 
     $0 -G1 .  # Gitレポジトリ内についての、ディスク占有の状況を調べて、Gitに情報をコミットメッセージに入れて、空コミットをする。
-    $0 -B8 -b512 -.  # カレントディレクトリ内の、全てのファイルのディスク占有状況を表示する。    
+    $0 -B8 -b512 -.  # カレントディレクトリ内の、全てのファイルのディスク占有状況を表示する。
 
  オプション: 
 
     -, 0 : 千進法の3桁区切りのコンマを打たない。
     -b 512 : 各ファイルの占有するブロックサイズを取得して、それを何倍にすることで占有サイズと見なすかの、倍率。
-    -i 0 : ファイルのハードリンクによる重複を考慮しない。つまり、両方とも数える。i-node で判定。
+    -i 0 : ファイルのリンクによる重複を考慮しない。つまり、両方とも数える。i-node で判定。
+    -l 0 : シンボリックリンクファイルについてたどって調べる。
 
     -G N: Gitのコミットのメッセージ(N=0,1,2) 以下を参照せよ。     
      -G 0 : 単に gitのコマンド文を出力する。そのgit文は、--allow-empty を使う。
@@ -147,5 +153,6 @@ sub HELP_MESSAGE {
     * このプログラムは、UNIX/Linuxコマンドのfindの動作に依存している。
     * 空コミットと直前コミット文の正規表現による条件チェックをしている。cronによる実行をしても、似たGitのコメントが多数作られないようにするため。
     * 機微な情報が含まれる可能性を考え、対象としたディレクトリの名前は出さないことにした。ファイルの個数の情報で十分なことが多いであろう。
+    * デバッグ又はテストをする際に、-i と -l の相互作用で、無用に頭を悩まさせるかも知れない。
 
 =cut
