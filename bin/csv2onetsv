@@ -59,7 +59,7 @@ END {
   exit if 0 eq ( $o{2} //'' ) ;
   $rows = "1 + $rows" if ! $opt10 ; 
   my $sec = sprintf '%0.3f 秒' , tv_interval $t0 ;
-  say STDERR BOLD CYAN FAINT "出力行数: $rows ; 処理されたファイル数: $files ; 除外されたファイル: @excluded ; 最後に処理したファイル: $endf ; 実行時間 : ", $sec ;
+  say STDERR BOLD CYAN FAINT "出力行数: $rows ; 処理されたファイル数: $files ; 除外指定(-E)のファイル: @excluded ; 最後に処理したファイル: $endf ; 実行時間 : ", $sec ;
 }
 
 sub each_file ( $ ) { 
