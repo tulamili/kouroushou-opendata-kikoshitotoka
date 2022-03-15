@@ -6,7 +6,7 @@ use feature 'say' ;
 use File::Copy qw[ copy ] ;
 use File::Spec::Functions qw [ catfile ] ; 
 use FindBin qw[ $Bin $Script ] ;
-use Getopt::Std ; getopts '2:fh:t:' , \my %o ; 
+use Getopt::Std ; getopts '2:fh:t:U' , \my %o ; 
 use POSIX qw [ strftime ] ; 
 use Term::ANSIColor qw[ :constants ] ; $Term::ANSIColor::AUTORESET = 1 ;
 use Time::HiRes qw[ gettimeofday tv_interval ] ; 
@@ -37,7 +37,12 @@ die "$directory does not exist as a directory. \n" unless -d $directory ;
 my $newname = catfile $directory , strftime "$o{h}%y%m%dT%H%M$o{t}" , localtime [ stat $srcfile ] -> [ 9 ] ; #  ( $modified ) ; 
 die "$newname is a directory. \n" if -d $newname ;  # コピー先のファイル名が、なぜかディレクトリだったら停止。
 die "$newname already exists. \n" if -e $newname && ! $o{f} ; # コピー先にファイルが存在する場合、-fの指定が無ければ停止。
-copy $srcfile , $newname or die ; 
+if ( $o{U} ) {
+  `perl -pe 's/^\\xef\\xbb\\xbf//;s/\\r\$//' $srcfile > $newname` 
+} 
+else { 
+  copy $srcfile , $newname or die "copy filed ($srcfile ->$newname)\n" 
+} # <^^
 say STDERR FAINT YELLOW "Copy Done : $srcfile --> " , $newname unless $opt20 ;
 die "$newname creation failed.\n" unless -e $newname ; 
 exit 0 ; 
@@ -90,6 +95,8 @@ $0 FILE DIR
    -t STR : 新しいファイル名の末尾の部分。未指定なら .csv
    -2 0   : 標準エラー出力に、2次情報を出力しない。 
 
+
+   -U     : 先頭のBOMを除去し、改行コードの"\r\n"の"\r"を除去する。
    --help : このヘルプを表示。引数の数が足りない場合も表示。 --help opt でオプションのみを表示。
 
  目的: 
