@@ -6,7 +6,7 @@ renamed=$selfdir/../renamed
 binded=$selfdir/../binded
 export PATH=$selfdir:$PATH ; # パスの設定
 export PERL5LIB="$HOME/perl5/lib/perl5${PERL5LIB:+:${PERL5LIB}}" ; # cpanmを利用していろいろなモジュールをインストールしているため
-sleep $(( $RANDOM % 3 )) ; # ランダムな秒数待ってみる。3秒以内で。
+sleep $(( $RANDOM % 120 )) ; # ランダムな秒数待ってみる。3秒以内で。
 
 cd $selfdir 
 proc1="dl2gitrepo $fetched https://www.mhlw.go.jp/content/life_welfare_small_fund.csv 緊急小口資金等の特例貸付"
