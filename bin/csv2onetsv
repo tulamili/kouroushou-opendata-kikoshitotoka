@@ -105,7 +105,7 @@ sub str2tp ( $$ ) { # 文字列をTime::Pieceのオブジェクトに変換す�
   my $o = $_[1] ; # 基準日 o ; ファイル名の引数から考えた。
   if ( $d =~ m|^/?(\d+)/(\d+)$|) { 
   	return Time::Piece -> strptime ( '2020-03-25' , '%Y-%m-%d' ) if $. == 2 && $d eq '3/25' ; 
-  	my ($d1,$d2,$div) = map { Time::Piece -> strptime ( $_ , '%Y/%m/%d') } map { "$_/$d"} do { my $y = $o -> year ; ($y-1,$y,$y+1) } ;
+  	my ($d1,$d2,$div) = map { Time::Piece -> strptime ( $_ , '%Y/%m/%d') } map { "$_/$1/$2"} do { my $y = $o -> year ; ($y-1,$y,$y+1) } ;
   	return  ( sort { abs( $a - $o ) <=> abs ( $b - $o ) } ( $d1,$d2,$div ) ) [0] ; 
   }
   $d =~ s/R(\d+)/2018+$1/e ; # 令和のRが頭についた年は、西暦に変換する。
